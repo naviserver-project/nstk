@@ -1,0 +1,449 @@
+Vlad Seryakov
+vlad@crystalballinc.com
+
+
+  NaviServer ToolKit
+----------------------
+
+To install nstk, enter
+
+  make install
+
+To see the demo, restart the server and point your browser to
+
+  http:://yourhostname/nstk/index.nstk
+
+  Templating
+-----------------
+
+This toolkit provides templating features for NaviServer. It registers
+special tags callbacks that will be called by HTML parser. These callbacks
+are responsible for producing necessary HTML code implementing the tag's logic.
+
+Templating engine allows to separate procedural and presentation logic by
+combining two files: .tcl and .adp as one template page.
+.tcl file contains all procs and code and .adp just the presentation of
+the prepared data in HTML. When request comes for index.nstk, templating
+engine calls index.tcl page first and then parses index.adp. In the
+index.adp file it is posible to access all variables and data structures
+created by index.tcl script.
+
+Variables from .tcl can be access in the .adp file by using @..@ notation:
+
+ @name@ refers to Tcl variable name
+ @name.key@ refers to Tcl arry item by key
+
+For example:
+
+  in .tcl file we have the following statement:
+
+  set curtime [ns_fmttime [ns_time]]
+
+  in .adp file to show current time we use the following:
+
+  Current time is : @curtime@
+
+Currently the following tags are implemented in nstk:
+
+ <master src=name>
+
+   nstk will substitute master tag with the output generated
+   by the template 'name'. that template can be just one name.adp page
+   or both name.tcl and name.adp pair. Master tag is used by child pages,
+   i.e. inner page will call its master to be embedded in the master's
+   HTML layout.
+
+   Ex: index.adp
+
+   <master src=master>
+   <TABLE...
+     content
+   </TABLE>
+
+ <slave>
+
+   nstk will substitute slave tag with the output produced by the calling this master
+   slave page. slave tag is used by master pages only, if current page is not
+   called by anyone as a master, this tag produces no output at all.
+
+   Ex: master.adp
+
+   <TABLE>
+   <TR><TD>
+       top level menu
+       </TD>
+   <TR><TD>
+       <slave>
+       </TD>
+   </TR>
+   </TABLE>
+
+ <multirow>
+
+   Repeat HTML code between ther tags for each row in the datasource.
+   Datasource is list each row represented by array, rows are named as
+   ds:1, ds:2, ds:3 ..., where ds is name of the datasource.
+   nstk has special Tcl command to build datasources: nstk::multirow.
+   In the template, each field in the row can be accesed as @ds.field@
+
+   Ex: in .tcl:
+
+    nstk::multirow create ds name address
+    nstk::multirow append ds "John Smith" "1 Main St"
+    nstk::multirow append ds "Bill Gates" "111 Liberty Sq"
+
+   in .adp
+
+   <TABLE BORDER=1 CELLSPACING=0>
+   <multirow name=ds>
+   <TR><TD>@ds.name@</TD>
+       <TD>@ds.address@</TD>
+   </TR>
+   </multirow>
+   </TABLE>
+
+
+ <group>
+
+   Repeat template chunk until the column name stays the same, it is used inside multirow
+   tags only. This tag assumes that data is sorted by specified column.
+
+  Ex: show items table, for each type, show all names in the separate column.
+
+    <multirow name=item>
+      <TR><TD>@item.type@</TD>
+          <TD>
+          <group name=people column=type>
+          @item.name@<BR>
+          </group>
+          </TD>
+      </TR>
+    </multirow>
+
+ <list name=listname></list>
+
+   Repeat HTML code between <list> and </list> tags for each item in the given list.
+   List item refered as @listname:item@
+
+   Ex:
+
+   <OL>
+   <list name=list>
+   <LI>@list:item@
+   </list>
+   </OL>
+
+ <if condition> <else> </if>
+
+   Evaluate given condition and execute corresponding HTML code. Variables in the condition
+   are refered using @..@ notation.
+
+   the following operators can be used:
+
+    gt     - greater than, ex: <if @counter@ gt 10>
+    lt     - less than
+    ge     - grater and equal
+    le     - less and equal
+    eq     - equal
+    ne     - no equal
+    in     - included in the list, ex: <if @item@ in ab bc dc>
+    nil    - exists and not empty, ex: <if @item@ not nil>
+    odd    - if var is odd number, ex: <if @num@ odd>
+    even   - if var is even number
+    mod    - if num is modulo of, ex: <if @num@ mod 2>
+    true   - if var represent true condition: true, on, 1, ex: <if @var@ true>
+    match  - match using wildcards
+    regexp - match as regexp, ex: <if @var@ regexp ^1.*>
+
+ <return>
+
+   Return from current template, stop producing any output and return what is
+   produced so far to the client
+
+   Ex:
+
+   <if @cmd@ eq show>
+      Command: @cmd@
+      <return>
+   </if>
+
+ <continue>
+
+   In list and multirow tags can be used to skip the row
+
+ <include src=name>
+
+   Include and evaluate given template 'name'. This tag will be substituted by the output
+   produced named template. All variables form the parent are accessable in the
+   included page as well.
+
+ <stop>
+
+   This tag tells nstk to stop producing the output and just ignore everything
+   produced so far. nstk will to return anything from this template, whoever
+   called this tag should have sent the headers and response manually.
+
+
+  Utilities
+-----------------
+
+The ToolKit also provides usefull Tcl procs. the following functions are available:
+
+  nstk::config name ?default?
+
+    returns value of the config parameter specified in the
+    ns/server/${server}/module/nstk section
+
+
+  nstk::true value
+
+    returns 1 if value represent true symbol, one of the
+    true, on, 1 enabled, yes, y, t
+
+
+  nstk::nvl value ?default?
+
+    returns given value or if it is empty specified default
+
+    Ex: nstk::nvl $var -1
+
+
+  nstk::coalesce name ?default?
+
+    returns value of the given variable if it exists and not empty, otherwise
+    returns defualt value if specified
+
+    Ex: nstk::coalesce var -1
+
+
+  nstk::read_file file
+
+    read file contents and returns a string
+
+
+
+  nstk::write_file file data ?mode?
+
+    writes data into file, mode by default is w but can be anyting
+    what Tcl open command supports
+
+
+  nstk::sendmail to from subject body args
+
+    wrapper around ns_sendmail, supports file attachements
+
+    args are:
+
+     -headers {name val name val...} - string with name value pairs
+                                       to added as additional headers
+     -cc emails
+     -bcc emails - comma separated emails
+     -files filelist - listof file names to be send as attachements
+     -domain - if to or from are just usernames, this domain will be added or
+               [ns_info hostname] if no domain specified
+     -error msgvar - if specified, variable with this name will hold
+                     error messages if any from ns_sendmail
+     -content_type type - default is text/plain
+
+
+  nstk::cache cmd key args
+
+    provide high level interface for caching key value pairs.
+
+    Subcommands are:
+
+      nstk::cache set key value ?timeout?
+
+        assign key with given value, if timeout specified it defines number of seconds
+        this key value will be in the cache
+
+      nstk::cache get key
+
+        returns value of the given key, if the item expired at that time or not found
+        returns nothing
+
+      nstk::cache flush pattern
+
+        deletes all keys that match given pattern
+
+      nstk::cache names pattern
+
+       returns list with cache keys that match given apptern
+
+      nstk::cache values pattern
+
+        returns list with name value pairs for all matched items
+
+      nstk::cache append key value ?timeout?
+      nstk::cache lappend key value ?timeout?
+
+        appends/lappends value to the exiting key, if it does not exists, creates
+        new cache item
+
+      nstk::cache incr key
+
+        same as Tcl incr command but for cache item, if does not exists, it is created
+        with value 1
+
+
+  nstk::multirow cmd name args
+
+    create and manipulate datasources. Each datasource is a list of arrays where
+    each array represents separate row in the table. This datasource is used by
+    <multirow> tag in the .adp template.
+
+    Subcommands are:
+
+      nstk::multirow create name col1 col2 ...
+
+        creates datasource name with given columns
+
+        Ex: nstk::multirow create ds name address phone
+
+      nstk::multirow drop name
+
+        deletes datasource from the memory
+
+      nstk::multirow append name val1 val2 ...
+
+        appends row to the existing datasource
+
+        Ex: nstk::multrow append ds John "1 MainSt" 7035550101
+
+      nstk::multirow name size
+
+        returns number of rows in the datasource
+
+      nstk::multirow update name index val1 val2 ...
+
+        updates specified row in the datasource with new values
+
+        Ex: nstk::multirow update ds 0 Peter "No address" 2029998765
+
+      nstk::multirow local name index
+
+        creates local variables named as columns in the datasource and
+        assignes with values form specified row
+
+        Ex: nstk::multirow local ds 0
+            will create Tcl variables name with value Peter, address with value "No address" and
+            phone with value 2029998765
+
+      nstk::multirow get name index column
+
+        returns value fo the specified column from the specified row
+
+        Ex: nstk::multirow get ds 0 name
+            will return Peter
+
+      nstk::multirow set name index col1 val1 col2 val2 ...
+
+        updates specified datasource row with new values
+
+        Ex: nstk::multirow set ds 0 name Yana phone 011798756432
+
+
+  nstk::db::multirow name sql ?-eval script? ?-db dbhandle? -level level?
+
+    Execute database query and create multirow datasource name,  each result row will create
+    separate multirow row. If eval si not empty, it will be executed for every row. Local
+    array row will hold all column values for the current row in the eval script.
+
+    if db is not specified, handle from database pool configured in the
+    ns/server/${server}/module/nstk as database will be used.
+
+    Ex: in .tcl
+        set db [ns_db gethandle poolname]
+        nstk::db::multirow people "SELECT id,name,address FROM people" -db $db -eval {
+          set row(name) "<A HREF=people.nstk?id=$row(id)>$row(name)</A>"
+        }
+
+        in .adp
+
+        <multirow name=people>
+        <TD>@people.name@</TD><TD>@people.address@</TD>
+        </multirow>
+
+
+  nstk::db::handle { pool "" } { count 1 }
+
+    Returns a database connection handle. Returns the same database handle
+    for all subsequent calls until nstk::db::release is called.  This allows
+    the same handle to be used easily across multiple procedures.
+    Returns A database handle
+
+
+  nstk::db::release
+
+    Releases a database handle previously requested with nstk::db::handle.
+
+
+  nstk::db::value sql ?-db db? ?-default value? ?-cache name? ?-expires ttl? ?-colindex idx? ?-colname name?
+
+    Returns the first column of the result.
+    If the query doesn't return a row, returns -default value
+
+    Ex: set name [ntsk::db::value "SELECT name FROM people WHERE id=1"]
+
+
+  nstk::db::list sql ?-db db? ?-cache name? ?-expires ttl? ?-force t|f? ?-colindex idx? ?-colname name?
+
+    Returns the first column of each row and returns it as a Tcl list
+
+    Ex: set names [nstk::db::list "SELECT name FROM people"]
+
+
+  nstk::db::multilist sql ?-db db? ?-plain t|f? ?-cache name? ?-expires ttl? ?-force t|f? ?-maxrows n?
+
+    Returns a list of Tcl lists with each sublist containing the columns
+    returned by the database; if no rows are returned by the
+    database, returns the empty string
+    -plain result will contain plain list with all columns from all rows
+    -cache specifies name of the cache item under which to save results
+    -force t forces flushing cached results
+    -expires specifies timeout for cached results
+
+    Ex: set people [nstk::db::multilist "SELECT id,name FROM people"]
+
+
+  nstk::db::multivalue sql ?-db db? ?-prefix prefix? ?-cache name? ?-expires ttl? ?-force t|f?
+
+    Performs the SQL query $sql that returns 0 or 1 row,
+    setting variables to column values.
+     -prefix specifies additional name prefix to make column names different
+    Returns -1 in case of error
+
+    Ex: nstk::db::multivalue "SELECT id,name FROM people" -cache people -expires 86400
+        if { $id == 1 && $name == "John" } {
+        }
+
+  nstk::db::foreach sql code ?-db? ?-prefix?
+
+    Performs the SQL query $sql, executing code once for each row with
+    variables set to column values.
+    Returns -1 on error or number of rows processed
+
+    Ex: nstk::db::foreach "SELECT id,name FROM people" {
+          ns_log Notice $id = $name
+        }
+
+  nstk::db::begin ?-db?
+
+    Begins a database transaction, nested calls are allowed, actuall begin will happen
+    on the first call only, all subsequent calls will result in increasing transaction counter.
+    Returns 0 on success, -1 on error
+
+  nstk::db::commit ?-db?
+
+    Commits a database transaction. Nested calls are allowd, actual commit will
+    happend when the transaction counter will reach zero.
+    Returns 0 on success, -1 on error
+
+  nstk::db::rollback { args } {
+
+    Rollbacks a database transaction.
+
+  nstk::db::rowcount ?-db?
+
+    Returns number of rows affected by last INSERT,UPDATE or DELETE statement.
+
