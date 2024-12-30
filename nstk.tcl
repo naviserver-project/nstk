@@ -168,7 +168,7 @@ proc nstk::read_file { path } {
     }
     if { [catch {
       set fd [::open $path]
-      fconfigure $fd -translation binary -encoding binary
+      fconfigure $fd -translation binary
       set text [::read $fd]
       ::close $fd
     } errmsg] } {
@@ -187,7 +187,7 @@ proc nstk::write_file { path data { mode w } } {
 
     if { [catch {
       set fd [::open $path $mode]
-      fconfigure $fd -translation binary -encoding binary
+      fconfigure $fd -translation binary
       puts -nonewline $fd $data
       ::close $fd
     } errmsg] } {
@@ -253,7 +253,7 @@ proc nstk::sendmail { to from subject body args } {
       switch [set name [string tolower $name]] {
        cc - bcc { append $name $value, }
       }
-      ns_set update $hdrs $name $value
+      ns_set iupdate $hdrs $name $value
     }
     if { [catch { ns_sendmail $to $from $subject $body $hdrs $bcc $cc } errmsg] } {
       nstk::conn::log Error nstk::sendmail $from: $to: $subject: $errmsg
